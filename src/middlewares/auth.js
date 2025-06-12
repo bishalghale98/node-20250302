@@ -1,29 +1,30 @@
 import { verifyJWT } from "../utils/jwt.js";
 
-function auth(req, res, next) {
-  const authHeader = req.headers.authorization;
+async function auth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    let token;
 
-  let authToken;
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.headers.cookie) {
+      const cookies = Object.fromEntries(
+        req.headers.cookie.split("; ").map(cookie => cookie.split("="))
+      );
+      token = cookies.token;
+    }
 
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    authToken = authHeader.split(" ")[1];
-  } else {
-    const cookie = req.headers.cookie;
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized: No token provided" });
+    }
 
-    if (!cookie) return res.status(401).send("User not authenticated.");
+    const userData = await verifyJWT(token);
+    req.user = userData;
 
-    authToken = cookie.split("=")[1];
+    next();
+  } catch (err) {
+    res.status(403).json({ error: "Forbidden: Invalid or expired token" });
   }
-
-  verifyJWT(authToken)
-    .then((data) => {
-      req.user = data;
-
-      next();
-    })
-    .catch(() => {
-      res.status(400).send("Invalid token");
-    });
 }
 
 export default auth;
